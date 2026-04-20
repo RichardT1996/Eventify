@@ -126,19 +126,6 @@ If you set a password for your MySQL root user, update `api/config.php` accordin
 - `POST /api/events.php?id=1 (_method=PUT)` - Update an event
 - `DELETE /api/events.php?id=1` - Delete an event
 
-## Troubleshooting
-
-**Q: I get a "CORS" error in the browser console**
-> A: You must access the app via `http://127.0.0.1:8000`, not `file://`. Use the PHP server.
-
-**Q: MySQL connection fails**
-> A: Check that MySQL is running. On macOS, try `brew services start mysql`. Update `api/config.php` with your MySQL password.
-
-**Q: Image upload fails**
-> A: Allowed formats are JPG, PNG, GIF, WEBP. Max size is 5MB. The `images/` folder must be writable.
-
-**Q: Events don't appear after adding**
-> A: Check the browser console for errors. Verify the MySQL database has the `events` table (run `database.sql` again).
 
 ## Notes
 
