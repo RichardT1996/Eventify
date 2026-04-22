@@ -164,6 +164,15 @@
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
 
+        // Ignore rapid repeat submits while a request is already in progress.
+        if (saveButton.disabled) {
+            return;
+        }
+
+        const originalButtonText = saveButton.textContent;
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving...";
+
         // Simple front-end validation before sending the API request.
         const payload = {
             name: nameInput.value.trim(),
@@ -215,6 +224,9 @@
             setMessage("Event added successfully.", false);
         } catch (error) {
             setMessage(error.message || "Unable to save event.", true);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = originalButtonText;
         }
     });
 

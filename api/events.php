@@ -103,8 +103,30 @@ function saveUploadedImage(?array $file): ?string
         respond(500, ['error' => 'Could not create images directory.']);
     }
 
-    $filename = bin2hex(random_bytes(16)) . '.' . $allowedMimeTypes[$mimeType];
+    // Reuse an existing file when the uploaded bytes already exist in /images.
+    $fileHash = hash_file('sha256', $tmpName);
+    if ($fileHash === false) {
+        respond(500, ['error' => 'Could not process uploaded image.']);
+    }
+
+    $existingImages = glob($imagesDir . '/*.{jpg,jpeg,png,gif,webp,JPG,JPEG,PNG,GIF,WEBP}', GLOB_BRACE) ?: [];
+    foreach ($existingImages as $existingPath) {
+        if (!is_file($existingPath)) {
+            continue;
+        }
+
+        $existingHash = hash_file('sha256', $existingPath);
+        if ($existingHash !== false && hash_equals($fileHash, $existingHash)) {
+            return 'images/' . basename($existingPath);
+        }
+    }
+
+    $filename = $fileHash . '.' . $allowedMimeTypes[$mimeType];
     $destination = $imagesDir . '/' . $filename;
+
+    if (is_file($destination)) {
+        return 'images/' . $filename;
+    }
 
     if (!move_uploaded_file($tmpName, $destination)) {
         respond(500, ['error' => 'Could not store uploaded image.']);
@@ -129,6 +151,21 @@ function deleteStoredImage(?string $relativePath): void
     $absolutePath = dirname(__DIR__) . '/' . $normalized;
     if (is_file($absolutePath)) {
         @unlink($absolutePath);
+    }
+}
+
+function deleteStoredImageIfUnreferenced(PDO $db, ?string $relativePath): void
+{
+    if (!$relativePath) {
+        return;
+    }
+
+    $statement = $db->prepare('SELECT COUNT(*) FROM events WHERE image_path = :image_path');
+    $statement->execute(['image_path' => $relativePath]);
+    $referenceCount = (int)$statement->fetchColumn();
+
+    if ($referenceCount === 0) {
+        deleteStoredImage($relativePath);
     }
 }
 
@@ -227,7 +264,7 @@ try {
 
         // Remove old image only after a successful update with a new upload.
         if ($newImagePath !== null && !empty($existingEvent['image_path']) && $existingEvent['image_path'] !== $newImagePath) {
-            deleteStoredImage((string)$existingEvent['image_path']);
+            deleteStoredImageIfUnreferenced($db, (string)$existingEvent['image_path']);
         }
 
         respond(200, ['data' => ['id' => $id, 'image_path' => $imagePath]]);
@@ -249,8 +286,8 @@ try {
         $statement = $db->prepare('DELETE FROM events WHERE id = :id');
         $statement->execute(['id' => $id]);
 
-        // Keep storage tidy by deleting the linked image file too.
-        deleteStoredImage((string)($existingEvent['image_path'] ?? ''));
+        // Keep storage tidy by deleting only files no other events still use.
+        deleteStoredImageIfUnreferenced($db, (string)($existingEvent['image_path'] ?? ''));
 
         respond(200, ['data' => ['id' => $id]]);
     }
